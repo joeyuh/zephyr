@@ -30,6 +30,19 @@ When building targeting an nrf52 series board with the Zephyr Bluetooth Controll
 use ``-DEXTRA_CONF_FILE=overlay-bt_ll_sw_split.conf`` to enable the required ISO
 feature support.
 
+Building for the nice!nano-compatible Pro Micro nRF52840
+--------------------------------------------------------
+
+Build with the Nordic controller and calibrated LFRC configuration::
+
+   west build --no-sysbuild -b promicro_nrf52840/nrf52840/uf2 \
+     samples/bluetooth/bap_broadcast_sink -- \
+     '-DEXTRA_CONF_FILE=overlay-sdc.conf;overlay-lfrc.conf'
+
+Decoded audio appears as the two-channel ``USB Broadcast Sink sample`` input
+device. Add ``overlay-cpu-load.conf`` to print aggregate CPU load every five
+seconds.
+
 Building for an nrf5340dk
 -------------------------
 

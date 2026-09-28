@@ -223,7 +223,11 @@ static void send_data(struct broadcast_source_stream *source_stream)
 	if (size < sizeof(send_pcm_data)) {
 		const size_t padding_size = sizeof(send_pcm_data) - size;
 
-		printk("Not enough bytes ready, padding %d!\n", padding_size);
+		static size_t count;
+
+		if (++count % 10000U == 0U) {
+			printk("USB audio buffer short, padding %d bytes\n", padding_size);
+		}
 		memset(&((uint8_t *)send_pcm_data)[size], 0, padding_size);
 	}
 #endif
@@ -521,6 +525,42 @@ int main(void)
 	struct bt_le_ext_adv *adv;
 	int err;
 
+#if defined(CONFIG_LIBLC3) && defined(CONFIG_USE_USB_AUDIO_INPUT)
+	const struct device *broadcaster_dev = DEVICE_DT_GET(DT_NODELABEL(uac2_broadcaster));
+	static struct uac2_ops usb_audio_ops = {
+		.terminal_update_cb = terminal_update_cb,
+		.get_recv_buf = get_recv_buf_cb,
+		.data_recv_cb = data_recv_cb,
+		.sof_cb = uac2_sof_cb,
+	};
+	struct usbd_context *sample_usbd;
+
+	if (!device_is_ready(broadcaster_dev)) {
+		printk("Cannot get USB Broadcaster Device\n");
+		return -EIO;
+	}
+
+	(void)memset(streams, 0, sizeof(streams));
+	for (size_t i = 0U; i < ARRAY_SIZE(streams); i++) {
+		ring_buf_init(&(streams[i].audio_ring_buf), sizeof(streams[i]._ring_buffer_memory),
+			      streams[i]._ring_buffer_memory);
+	}
+
+	usbd_uac2_set_ops(broadcaster_dev, &usb_audio_ops, NULL);
+	sample_usbd = sample_usbd_init_device(NULL);
+	if (sample_usbd == NULL) {
+		printk("Failed to init USBD device\n");
+		return -ENODEV;
+	}
+
+	err = usbd_enable(sample_usbd);
+	if (err != 0) {
+		printk("Failed to enable USBD: %d\n", err);
+		return err;
+	}
+	printk("USB initialized\n");
+#endif
+
 #if defined(CONFIG_SOC_NRF5340_CPUAPP)
 	/* Use this to turn on 128 MHz clock for the nRF5340 cpu_app */
 	err = nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
@@ -549,49 +589,6 @@ int main(void)
 	}
 
 #if defined(CONFIG_LIBLC3)
-#if defined(CONFIG_USE_USB_AUDIO_INPUT)
-	const struct device *broadcaster_dev = DEVICE_DT_GET(DT_NODELABEL(uac2_broadcaster));
-	static struct uac2_ops usb_audio_ops = {
-		.terminal_update_cb = terminal_update_cb,
-		.get_recv_buf = get_recv_buf_cb,
-		.data_recv_cb = data_recv_cb,
-		.sof_cb = uac2_sof_cb,
-	};
-	struct usbd_context *sample_usbd;
-
-	if (!device_is_ready(broadcaster_dev)) {
-		printk("Cannot get USB Broadcaster Device\n");
-		return -EIO;
-	}
-
-	printk("Found USB Headset Device\n");
-
-	(void)memset(streams, 0, sizeof(streams));
-
-	for (size_t i = 0U; i < ARRAY_SIZE(streams); i++) {
-		ring_buf_init(&(streams[i].audio_ring_buf), sizeof(streams[i]._ring_buffer_memory),
-			      streams[i]._ring_buffer_memory);
-		printk("Initialized ring buf %zu: capacity: %u\n", i,
-		       ring_buf_capacity_get(&(streams[i].audio_ring_buf)));
-	}
-
-	usbd_uac2_set_ops(broadcaster_dev, &usb_audio_ops, NULL);
-
-	sample_usbd = sample_usbd_init_device(NULL);
-	if (sample_usbd == NULL) {
-		printk("Failed to init USBD device: %d\n", err);
-		return -ENODEV;
-	}
-
-	err = usbd_enable(sample_usbd);
-	if (err != 0) {
-		printk("Failed to enable USBD: %d\n", err);
-		return err;
-	}
-
-	printk("USB initialized\n");
-
-#endif /* defined(CONFIG_USE_USB_AUDIO_INPUT) */
 	k_thread_start(encoder);
 #endif /* defined(CONFIG_LIBLC3) */
 

@@ -55,7 +55,7 @@ BUILD_ASSERT(IS_ENABLED(CONFIG_SCAN_SELF) || IS_ENABLED(CONFIG_SCAN_OFFLOAD),
 #endif /* CONFIG_SCAN_SELF */
 
 #define PA_SYNC_INTERVAL_TO_TIMEOUT_RATIO 5 /* Set the timeout relative to interval */
-#define PA_SYNC_SKIP                      5
+#define PA_SYNC_SKIP                      0
 #define NAME_LEN                          sizeof(CONFIG_TARGET_BROADCAST_NAME) + 1
 #define BROADCAST_DATA_ELEMENT_SIZE       sizeof(int16_t)
 
@@ -878,6 +878,13 @@ static int init(void)
 	};
 	int err;
 
+	if (IS_ENABLED(CONFIG_USE_USB_AUDIO_OUTPUT)) {
+		err = usb_init();
+		if (err != 0 && err != -EALREADY) {
+			printk("USB init failed (err %d)\n", err);
+		}
+	}
+
 	err = bt_enable(NULL);
 	if (err) {
 		printk("Bluetooth enable failed (err %d)\n", err);
@@ -916,10 +923,6 @@ static int init(void)
 
 	if (IS_ENABLED(CONFIG_LIBLC3)) {
 		lc3_init();
-	}
-
-	if (IS_ENABLED(CONFIG_USE_USB_AUDIO_OUTPUT)) {
-		usb_init();
 	}
 
 	return 0;
@@ -1050,14 +1053,13 @@ static int pa_sync_create(void)
 	}
 
 	bt_addr_le_copy(&create_params.addr, &broadcaster_addr);
-	if (BT_FEAT_LE_PER_ADV_ADI_SUPP(feature.features)) {
-		create_params.options = BT_LE_PER_ADV_SYNC_OPT_FILTER_DUPLICATE;
-	} else {
-		create_params.options = BT_LE_PER_ADV_SYNC_OPT_NONE;
-	}
+	create_params.options = BT_LE_PER_ADV_SYNC_OPT_NONE;
 	create_params.sid = broadcaster_info.sid;
 	create_params.skip = PA_SYNC_SKIP;
-	create_params.timeout = interval_to_sync_timeout(broadcaster_info.interval);
+	create_params.timeout = 200; /* 2 seconds, no skipped events during diagnosis */
+	printk("PA test: interval=%u skip=%u timeout=%u options=%u\n",
+	       broadcaster_info.interval, create_params.skip, create_params.timeout,
+	       create_params.options);
 
 	return bt_le_per_adv_sync_create(&create_params, &pa_sync);
 }

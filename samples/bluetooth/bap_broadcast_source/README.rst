@@ -31,6 +31,19 @@ feature support.
 The sample defaults to sequential packing of BIS subevents, add
 ``-DCONFIG_ISO_PACKING_INTERLEAVED=y`` to use interleaved packing.
 
+Building for the nice!nano-compatible Pro Micro nRF52840
+----------------------------------------------------------
+
+Build with the Nordic controller and calibrated LFRC configuration::
+
+   west build --no-sysbuild -b promicro_nrf52840/nrf52840/uf2 \
+     samples/bluetooth/bap_broadcast_source -- \
+     '-DEXTRA_CONF_FILE=overlay-sdc.conf;overlay-lfrc.conf'
+
+The device appears as ``USB Broadcast Source``. Select it as the playback
+output to send 48 kHz stereo host audio into the BIS source. Add
+``overlay-cpu-load.conf`` to print aggregate CPU load every five seconds.
+
 Building for an nrf5340dk
 -------------------------
 
